@@ -1,0 +1,739 @@
+from jupyterthemes import jtplot
+jtplot.style(theme = 'chesterish')
+
+from scipy.stats import norm
+ 
+import pandas_datareader.data as web
+import numpy as np
+import pandas as pd
+pd.set_option('display.max_columns', None)
+pd.set_option('display.max_rows', None)
+
+import talib as ta
+import tushare as ts
+
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+
+import statsmodels.api as sm
+import statsmodels.tsa.api as smt
+import statsmodels.formula.api as smf
+import scipy.stats as scs
+from arch import arch_model
+
+import seaborn as sns
+import datetime as datatime
+
+import itertools
+
+import warnings
+warnings.filterwarnings('ignore')
+
+from sklearn.ensemble import ExtraTreesRegressor
+from sklearn.model_selection import cross_val_predict
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+
+import math
+
+from fredapi import Fred
+fred = Fred(api_key='6c4934799f2e803a644ed53aed065375')
+#fred.get_series('GDP')
+
+
+class Reference_index(object):
+    
+    def __init__(self, start_date = '2000-01-01', 
+                 end_date = '2019-12-01', freq = 'D'):
+        
+        self.start_date = start_date
+        self.end_date = end_date
+        self.freq = freq
+        
+        
+    def Currency(self, currency_dict = {'USD/EUR':'DEXUSEU',
+                                        'JPY/USD':'DEXJPUS',
+                                        'USD/UKP':'DEXUSUK'}):
+        currency_dic = {}       
+        for symbol, currency in currency_dict.items():
+            #Fred(api_key='abcdefghijklmnopqrstuvwxyz123456',response_type='dict')
+            #from fred import Fred
+            #https://fred.stlouisfed.org/categories/22
+            #https://github.com/mortada/fredapi
+            currency_dic[symbol] = fred.get_series(currency,observation_start = self.start_date,
+                                                observation_end = self.end_date)
+        data = pd.DataFrame(currency_dic)
+            
+        return data
+    
+    def Money(self, Money_dict = {'M2':'M2','M1':'M1'}):
+        Money_dic = {}       
+        for symbol, Money in Money_dict.items():
+
+            Money_dic[symbol] = fred.get_series(Money,observation_start = self.start_date,
+                                                observation_end = self.end_date)
+                       
+        data = pd.DataFrame(Money_dic)
+        data = data.resample('B', fill_method = 'ffill')
+            
+        return data    
+
+    def LABOR(self, LABOR_dict = {'Night_LABOR':'USDONTD156N',
+                                  '1Month_LABOR':'USD1MTD156N',
+                                  '3Month_LABOR':'USD3MTD156N',
+                                  '1Year_LABOR' :'USD12MD156N',
+                                  '6Month_LAbOR':'USD6MTD156N'}):
+        LABOR_dic = {}       
+        for symbol, LABOR in LABOR_dict.items():
+            #Fred(api_key='abcdefghijklmnopqrstuvwxyz123456',response_type='dict')
+            #from fred import Fred
+            #https://fred.stlouisfed.org/categories/22
+            #https://github.com/mortada/fredapi
+            LABOR_dic[symbol] = fred.get_series(LABOR,observation_start = self.start_date,
+                                                observation_end = self.end_date)
+        
+        data = pd.DataFrame(LABOR_dic)
+            
+        return data
+    
+    def T_BILL(self, T_Bill_dict = {'3MTBill_R': 'TB3MS',
+                                    '1YTBill_R':'TB1YR',
+                                    '6MTBill_R':'DTB6',
+                                    '1MTBill_R':'TB4WK'}):
+        T_Bill_dic = {}
+        for symbol, T_bill in T_Bill_dict.items():
+            T_Bill_dic[symbol] = fred.get_series(T_bill,observation_start = self.start_date,
+                                                observation_end = self.end_date)
+        
+        data = pd.DataFrame(T_Bill_dic)
+            
+        return data
+    
+    def TIIS(self, TIIS_dict = {'10Y_TIIS_R':'DFII10',
+                                '5Y_TIIS_R' :'DFII5',
+                                'mean_TIIS_R':'DLTIIT'}):
+        TIIS_dic = {}
+        for symbol, TIIS in TIIS_dict.items():
+            TIIS_dic[symbol] = fred.get_series(TIIS,observation_start = self.start_date,
+                                                observation_end = self.end_date)
+        data = pd.DataFrame(TIIS_dic)
+
+        return data
+    
+    def FRMA(self, FRMA_dict = {'30Y_FRMA_R':'MORTGAGE30US',
+                                '15Y_FRMA_R':'MORTGAGE15US'}):
+        FRMA_dic = {}
+        for symbol, FRMA in FRMA_dict.items():
+            FRMA_dic[symbol] = fred.get_series(FRMA,observation_start = self.start_date,
+                                                observation_end = self.end_date)
+        data = pd.DataFrame(FRMA_dic)
+        data = data.resample('B', fill_method = 'ffill')
+            
+        return data
+    
+    def SWAP(self, SWAP_dict = {'10Y_SWAP_R':'DSWP10',
+                                '5Y_SWAP_R' :'MSWP5',
+                                '1Y_SWAP_R' :'DSWP1'}):
+        SWAP_dic = {}
+        for symbol, SWAP in SWAP_dict.items():
+            SWAP_dic[symbol] = fred.get_series(SWAP,observation_start = self.start_date,
+                                                observation_end = self.end_date)
+        data = pd.DataFrame(SWAP_dic)
+            
+        return data
+    
+    def T_Bond(self, T_Bond_dict = {'1Y_TBond_R':'DGS1',
+                                    '10Y_TBond_R':'DGS10'}):
+        T_Bond_dic = {}
+        for symbol, T_Bond in T_Bond_dict.items():
+            T_Bond_dic[symbol] = fred.get_series(T_Bond, obsercation_start = self.start_date,
+                                   observation_end = self.end_date)
+        data = pd.DataFrame(T_Bond_dic)
+            
+        return data
+            
+    
+    def Employment(self, employment_dict = {'employment':'EMRATIO'}):
+        employment_dic = {}
+        for symbol, employment in employment_dict.items():
+            employment_dic[symbol] = fred.get_series(employment,observation_start = self.start_date,
+                                                observation_end = self.end_date)
+        data = pd.DataFrame(employment_dic)
+        data = data.resample('B', fill_method = 'ffill')
+            
+        return data
+    
+    def Gold(self, Gold_dict = {'Gold':'GOLDAMGBD228NLBM'}):
+        Gold_dic = {}
+        for symbol, Gold in Gold_dict.items():
+            Gold_dic[symbol] = fred.get_series(Gold,observation_start = self.start_date,
+                                                observation_end = self.end_date)
+        data = pd.DataFrame(Gold_dic)
+
+        return data
+    
+    def refer_information(self):
+        
+        data = pd.concat([self.Currency(),self.Money(),self.T_BILL(),self.TIIS(),
+                          self.Employment(),self.Gold(),self.LABOR(), 
+                          self.T_BILL(),self.SWAP(),self.T_Bond()], axis = 1)
+
+        data = data.fillna(method = 'ffill')    
+        data = data.dropna(inplace = True)
+        now = pd.datetime.now()
+        #pd.DataFrame.to_csv(data, 'C:\LYJ\Python\Colosurge\data\Reference.csv')  
+        return data
+    
+   class Data_k(object):
+    #(http://tushare.org/fundamental.html)
+    def __init__(self, equity, US = True ,
+                 start_date = '2018-01-01', 
+                 end_date = '2019-12-01', 
+                 freq = 'D'):
+        
+        self.equity = equity
+        self.start_date = start_date
+        self.end_date = end_date
+        self.freq = freq
+        self.US = US
+
+    def data_prepare(self, get_data_info = False):
+        if not self.US:
+            data = ts.get_k_data(self.equity, 
+                                 start = self.start_date, 
+                                 end = self.end_date, 
+                                 ktype = self.freq)
+            data.set_index('date', inplace = True)
+            data.index = pd.to_datetime(data.index)
+
+        else:
+            data = web.DataReader(self.equity, 
+                                  data_source = 'yahoo',
+                                  start = self.start_date, 
+                                  end = self.end_date)
+
+        if get_data_info:
+            #print(data.info())
+            #print(data.describe())
+            #data.plot(figsize = (16,9))
+            #plt.show()
+            pass
+        return data
+
+#Time Series only accept data series
+class Time_Series_Analysis(object):
+    
+    def __init__(self, data, lags = 30):
+        # Input the data, and laga hyperparameter
+        self.data = data
+        self.lags = lags
+    
+    def SARIMAX_Treat(self, 
+                      pq_range = range(1, 20), 
+                      d_range = range(0, 2), 
+                      train = False, 
+                      summary = False):
+        # one of the two most import treatments in this class, SARIMA wants to identify the auto correlations
+        # of daily returns. the input data is a return series, output data will be three: bic score, params (p d q)
+        # and the best model. pdq will feed to Garch model for forcast the conditional standard divation
+        # because this step is very time consumming, so we just use trian option for debug purpose. in reality
+        # we will eliminate it.
+        
+        if train:
+            best_bic = float('inf')
+            best_order = None
+            best_mdl = None
+            m = 0
+            # set the range of parameters
+            print('Colosurge starts Training, it may take certain miniuties or hours or days')
+            #print('Why not try to find something sensible to do? don\'t waste your time on me, I am super busy')
+            pq_rng = pq_range
+            d_rng = d_range
+            pdq = list(itertools.product(pq_rng, d_rng, pq_rng))
+            for param in pdq:
+                if m == 50:
+                    break
+                else:
+                    tmp_mdl = sm.tsa.statespace.SARIMAX(self.data, 
+                                                        order = param,
+                                                        method = 'mle',
+                                                        enforce_invertibility = False,
+                                                        enforce_stationarity = False).fit()
+                    #tmp_mdl = smt.ARIMA(data, order = param).fit(method = 'mle', trend = 'nc')
+                    tmp_bic = tmp_mdl.bic
+                    m += 1
+                    if tmp_bic < best_bic:
+                        best_bic = tmp_bic
+                        best_order = param
+                        best_mdl = tmp_mdl
+                        m = 0
+
+        else:# debug
+            print('Caveat! the default order (3,1,3) is only for \
+            speed consideration, in reality should choose train = True')
+            best_order = (3, 1, 3)
+            best_mdl = sm.tsa.statespace.SARIMAX(self.data, 
+                                                 order = best_order, 
+                                                 method = 'mle', 
+                                                 enforce_invertibility = False, 
+                                                 enforce_stationarity = False).fit()
+            
+            best_bic = best_mdl.bic
+            print('SARIMAX training is over')
+
+        if summary:
+            print('BIC: {:6.5f} | order: {}'.format(best_bic, best_order))
+            #print('I am sure the result is superbe, far better than that damned machine learning neighbor')
+            print(best_mdl.summary())
+            self.Stationary_test_plot(best_mdl.resid)
+        return (best_bic, best_order, best_mdl)        
+    
+    def Garch_Treat(self, param, summary = False):
+
+        Garch_mdl = arch_model(self.data, p = param[0], o = param[1], q = param[2], 
+                               dist = 'StudentsT').fit(update_freq = 5, disp = 'off')
+        print('GARCH Traning is over')
+        if summary:
+            print(Garch_mdl.summary())
+            print('Squared Residual summary plotting')
+            self.Stationary_test_plot(Garch_mdl.resid ** 2)
+        return Garch_mdl
+        
+    def Time_Series_Prediction(self, 
+                               summary = False,  
+                               pq_range = range(1, 20), 
+                               d_range = range(0, 2), 
+                               train = False):
+        
+        Time_Series_Opinion = {}
+        
+        print(type(self.data))
+        
+        SARIMAX_result = self.SARIMAX_Treat(summary = summary, 
+                                            pq_range = pq_range, 
+                                            d_range = d_range, 
+                                            train = train)
+        
+        params, SARIMAX = SARIMAX_result[1], SARIMAX_result[2]
+        #print(params)
+        
+        Garch = self.Garch_Treat( param = params, summary = summary)
+        #print(Garch.forecast().variance.tail())
+        SD = np.sqrt(abs(Garch.forecast().variance.values[-1]))
+        
+        Time_Series_Opinion['SD'] = SD
+        Time_Series_Opinion['LAGS'] = params[0]
+        Time_Series_Opinion['Difference'] = params[1]
+        
+        return Time_Series_Opinion
+
+    def Stationary_test_plot(self, data, figsize = (16,16), style = 'seaborn'):
+        
+        if not isinstance(data, pd.Series):
+            data = pd.Series(data)
+        
+        with plt.style.context(style):
+            fig = plt.figure(figsize = figsize)
+            
+            layout = (3, 2)
+            ts_ax = plt.subplot2grid(layout, (0,0), colspan = 2)
+            acf_ax = plt.subplot2grid(layout, (1,0))
+            pacf_ax = plt.subplot2grid(layout, (1,1))
+            qq_ax = plt.subplot2grid(layout, (2,0))
+            pp_ax = plt.subplot2grid(layout, (2,1))
+            
+            data.plot(ax = ts_ax)
+            ts_ax.set_title('Colosurge Time Series Analysis')
+            smt.graphics.plot_acf(data, lags = self.lags, ax = acf_ax, alpha = 0.618)
+            smt.graphics.plot_pacf(data, lags = self.lags, ax = pacf_ax, alpha = 0.618)
+            sm.qqplot(data, line = 's', ax = qq_ax)
+            qq_ax.set_title('QQ Plot')
+            scs.probplot(data, sparams = (data.mean(), data.std()), plot = pp_ax)
+            
+            plt.tight_layout()
+        
+# the input data must from Data_k
+
+class Machine_Forecasting(Data_k):
+    
+    def __init__(self, equity, value_data_list, short = 5, middle = 20, long = 60, US = True,
+                 start_date = '2000-01-01', end_date = '2019-12-01', freq = 'D'):
+        
+        super().__init__(equities, US = True ,start_date = '2000-01-01', end_date = '2019-12-01', freq = 'D')
+        
+        self.value_data_list = value_data_list
+        self.short = short
+        self.middle = middle
+        self.long = long
+        
+    def data_split(self):
+        stock = self.data_prepare()
+        return stock
+    
+    def Time_Series_params(self, summary = False, pq_range = range(1, 20), 
+                           d_range = range(0, 2), train = False):
+        
+        stock = self.data_split()
+        stock_series = np.log(stock['Adj Close'] / stock['Adj Close'].shift(1)).dropna()
+        
+        temp_class = Time_Series_Analysis(stock_series)
+        opinion = temp_class.Time_Series_Prediction(summary = summary,  
+                                                    pq_range = pq_range, 
+                                                    d_range = d_range, 
+                                                    train = train)
+        
+        return opinion
+        
+    def machine_training(self, data, day_lags, day_diff):
+
+        train_data, test_data = self.train_data(data, 
+                                                day_lags = day_lags, 
+                                                day_diff = day_diff)
+        
+        n = len(list(train_data))
+        train_data, test_data = train_data.values, test_data.values
+        test_data = test_data.reshape(1, -1)
+        print(n)#debug
+        train_set, test_set = train_data[:-500], train_data[-500:]
+        
+        X_train, y_train = train_set[:, :-1], train_set[:, -1]
+        X_test, y_test = test_set[:, :-1], test_set[:, -1]
+        
+        y_train, y_test = y_train.reshape(-1, 1), y_test.reshape(-1,1)
+        X_train = StandardScaler().fit_transform(X_train)
+        X_test = StandardScaler().fit_transform(X_test)
+        
+        print('X_train_shape:{}'.format(X_train.shape))
+        print('y_train_shape:{}'.format(y_train.shape))
+        print('X_test_shape:{}'.format(X_test.shape))
+        print('y_test_shape:{}'.format(y_test.shape))
+        print('machine starts training')
+        
+        param_grid = [{'n_estimators': range(100, 120, 10),
+                      'max_depth': range(6, 8)}]
+        
+        model = ExtraTreesRegressor(bootstrap = True, oob_score = True,
+                                    random_state = 27, verbose = False,
+                                    n_jobs = -1)
+        
+        Trained_model = GridSearchCV(model, param_grid, cv = 5,
+                                     scoring = 'neg_mean_squared_error',
+                                     return_train_score = True).fit(X_train, y_train)
+
+        scores = cross_val_score(Trained_model, X_train, y_train,
+                                 scoring ='neg_mean_squared_error',
+                                 cv = 10)
+        
+        pred = Trained_model.predict(test_data)
+        
+        print('Training process is over')
+        print('Training Scores: {}'.format(scores))
+        print('Score Mean: {}'.format(scores.mean()))
+        print('Score SD: {}'.format(scores.std()))
+        
+        return pred
+    
+    def train_data(self, stock, day_lags, day_diff):
+        data = pd.DataFrame.copy(stock)
+        # eliminte zero values
+        for value in list(data):
+            for i, j in enumerate(data[value]):
+                if abs(j) < 0.0001:
+                    data[value][i] = 0.0001
+
+        # Calculate the stock daily return by adjust close price
+        data['Return'] = np.log(data['Adj Close'] / data['Adj Close'].shift(1))
+        data.loc['new_row'] = 0.0
+        #delete column close
+        
+        data.drop(columns = ['Close'], inplace = True)
+        # extract column names for future treatment
+        
+        list_info = list(data)
+        # data cleaning
+        data.dropna(inplace = True)
+
+        n = len(list(data))
+        # calculate three features: 
+        # calculate open, close, high, low lagging price 
+        for j in list(data):
+            for i in range(0, day_lags):
+                data['{}_lag_{}'.format(j, i + 1)] = data[j].shift(i + 1)
+        data.dropna(inplace = True)
+        print(list(data))
+        
+        # calcuate yesterday's open, close, high, low price    
+        for j in list_info:
+            for i in range(0, day_diff):
+                data['{}_diff_{}'.format(j, i + 1)] = data[j].shift(1).diff(i + 1)
+        
+        # calcualte short, middle, long term simple average 
+        for i in [self.short, self.middle, self.long]:
+            data['{}_MAE'.format(str(i))] = data['Adj Close_lag_1'].rolling(window = i).mean()
+            data['{}_MAV'.format(str(i))] = data['Adj Close_lag_1'].rolling(window = i).std()
+        data.dropna(inplace = True)
+        
+        data['label'] = data['Return']
+        data_train = data.iloc[: -1, n:]
+        print(data_train.columns)
+        data_test = data.iloc[-1, n: -1]
+        
+        return data_train, data_test
+    
+    def Machine_Opinion(self, summary = False, pq_range = range(1, 20),
+                        d_range = range(0, 2), train = False):
+                
+        stock = self.data_split()
+        opinion = self.Time_Series_params(summary = summary,  
+                                          pq_range = pq_range, 
+                                          d_range = d_range, 
+                                          train = train)
+        
+        Final_Opinion = {}
+
+        pred = self.machine_training(stock, 
+                                     day_lags = opinion['LAGS'], 
+                                     day_diff = opinion['Difference'])
+        print('mean:', pred)
+
+        SD = opinion['SD']
+        print('sd:',SD)#debug
+
+        for data in self.value_data_list: 
+            p =  float(norm.cdf(x = data, loc = pred, scale = SD))
+            if p < 0.5:
+                p = 200 * p
+            else:
+                p = 200 * (1 - p)
+            Final_Opinion['{}'.format(data)] = '{}%'.format(p)
+
+        return Final_Opinion
+        
+   class Trading_Strategy(Data_k):
+
+    def __init__(self, equity, US = True, start_date = '2018-01-01', end_date = '2019-12-01', freq = 'D'):
+        super().__init__(equity, US = US, start_date = start_date, end_date = end_date, freq = freq)
+
+    def Trader_Training(self, data):
+        #n = math.floor(len(data) / 4 )
+        #data1, data2, data3, data4 = data.iloc[:n, :], data.iloc[n: 2 * n,:], data.iloc[2 * n : 3 * n, :], data.iloc[3 * n:, :]
+        #copy1, copy2, copy3, copy4 = data1.copy(), data2.copy(), data3.copy(), data4.copy()
+        copy = data.copy()
+        best_score = -np.inf
+        best_param = {}
+        m = 0
+        for stop_p in np.arange(0.1, 1.0, 0.1):
+            for open_p in np.arange(0.1, 1.0, 0.1):
+                for hedge_p in np.arange(2.0, 3.0, 0.1):
+                    for short_p in range(2,8):
+                        if m == 100:
+                            break
+                        else:
+                            score = self.Trading(copy, short = short_p, stop_param = stop_p, hedge_param = hedge_p, open_param = open_p)[0]
+                            #score1 = self.Trading(copy1, short = short_p, stop_param = stop_p, hedge_param = hedge_p, open_param = open_p)[0]
+                            #score2 = self.Trading(copy2, short = short_p, stop_param = stop_p, hedge_param = hedge_p, open_param = open_p)[0]
+                            #score3 = self.Trading(copy3, short = short_p, stop_param = stop_p, hedge_param = hedge_p, open_param = open_p)[0]
+                            #score4 = self.Trading(copy4, short = short_p, stop_param = stop_p, hedge_param = hedge_p, open_param = open_p)[0]
+                            #score = score1 * score2 * score3 * score4
+                            #copy1, copy2, copy3, copy4 = data1.copy(), data2.copy(), data3.copy(), data4.copy()
+                            copy = data.copy()
+                            m += 1
+                            #print(m)
+
+                            if score > best_score:
+                                best_score = score
+                                best_param['short'] = short_p
+                                best_param['open_param'] = open_p
+                                best_param['hedge_param'] = hedge_p
+                                best_param['stop_param'] = stop_p
+                                m = 0
+                                #print('score: {}, short: {}, open: {}, hedge: {}, stop: {}'.format(score, short_p, open_p, hedge_p, stop_p))
+        return best_param
+        
+    def Trading(self, data, short, open_param, hedge_param, stop_param, summary = False):
+        
+        data['Return'] = data['Close'].pct_change()
+        data['SMA'] = data['Close'].rolling(window = short).mean()
+        data['SSD'] = data['Close'].rolling(window = short).std()
+        data['SD_hedge'] = data['SSD'].rolling(window = short).max()
+        # calculate he last day's data
+        data['SMA_lag_1'] = data['SMA'].shift(1) # SMA_lag_1
+        data['SD_hedge_lag_1'] = data['SD_hedge'].shift(1) ## SD_hedge_lag_1
+        # calculate open price and hedge price
+        data['up_long_price'] = data['SMA_lag_1'] + data['SD_hedge_lag_1'] * open_param # up_long_price SD_hedge_lag_1
+        data['down_short_price'] = data['SMA_lag_1'] - data['SD_hedge_lag_1'] * open_param
+        data['up_hedge_price'] = data['SMA_lag_1'] + data['SD_hedge_lag_1'] * hedge_param # up_hedge_price, SD_hedge_lag_1
+        data['down_hedge_price'] = data['SMA_lag_1'] - data['SD_hedge_lag_1'] * hedge_param
+        # calculate signal
+        data['up_long_signal'] = np.where(data['High'] > data['up_long_price'], 1, 0)
+        data['down_short_signal'] = np.where(data['Low'] < data['down_short_price'], -1, 0)
+        data['up_hedge_signal'] = np.where(data['High'] > data['up_hedge_price'], 1, 0)
+        data['down_hedge_signal'] = np.where(data['Low'] < data['down_hedge_price'], -1, 0)
+
+        data.dropna(inplace = True)
+        data.reset_index(inplace = True)
+        
+        flag = 0
+        trade = 0
+        for i in range(0, (len(data) - 1)):
+            if flag == 0:
+                if (data.loc[i, 'up_long_signal'] == 1 & data.loc[i, 'down_short_signal'] == -1):
+                    
+                    data.loc[i, 'my_return'] = 0
+                
+                elif data.loc[i, 'up_long_signal']:
+                    flag = 1                    
+                    trade += 1
+                    # Caution 2 the next day's open price may be higher than up_long_price
+                    up_long_price = max(data.loc[i, 'Open'], data.loc[i, 'up_long_price'])
+                    stop_loss_delta_1 = data.loc[i, 'SD_hedge_lag_1']
+
+                    data.loc[i, 'my_return'] = data.loc[i, 'Close'] / up_long_price - 1
+
+                    # today may trigger up_hedge or stop_loss signal, if so we need to sell it the next day:
+                    stop_loss_price = max(data.loc[i, 'SMA_lag_1'], up_long_price - stop_loss_delta_1 * stop_param)
+                    if (data.loc[i, 'Low'] < stop_loss_price or data.loc[i, 'up_hedge_signal']):
+                        # we use daily data
+                        data.loc[i, 'my_return'] = data.loc[i + 1, 'Open'] / up_long_price - 1
+                        flag = 0
+                        data.loc[i, 'position'] = 0
+                
+                elif data.loc[i, 'down_short_signal']:
+                    flag = 2
+                    trade += 1
+                    data.loc[i, 'position'] = -1
+                    #Caution 3, the next day's open price may be lower than down_short_price
+                    down_short_price = min(data.loc[i, 'Open'], data.loc[i, 'down_short_price'])
+                    stop_loss_delta_2 = data.loc[i, 'SD_hedge_lag_1']
+
+                    data.loc[i, 'my_return'] = data.loc[i, 'Close'] / down_short_price - 1
+
+                    # today may trigger down_hedge or stop_loss signal, if so we need to even it the next day:
+                    # stop loss strategy consists two part: fix stop loss which is down_short_price + stop_loss_delta_2 *
+                    # stop param; and dynamic stop loss: SMA_lag_1
+                    stop_loss_price = min(data.loc[i, 'SMA_lag_1'], down_short_price + stop_loss_delta_2 * stop_param)
+                    if (data.loc[i, 'High'] > stop_loss_price or data.loc[i, 'down_hedge_signal']):
+                        data.loc[i, 'my_return'] = 1 - data.loc[i + 1, 'Open'] / down_short_price
+
+            elif flag == 1: # long position
+                stop_loss_price_1 = max(data.loc[i, 'SMA_lag_1'], up_long_price - stop_loss_delta_1 * stop_param)
+                if data.loc[i, 'up_hedge_signal'] == 1 :
+                    data.loc[i, 'my_return'] = max(data.loc[i,'Open'], data.loc[i, 'up_hedge_price']) / data.loc[i - 1, 'Close'] - 1
+                    flag = 0
+                    
+                    data.loc[i, 'position'] = 0
+                elif data.loc[i, 'Low'] < stop_loss_price_1:
+                    # Caution 1: today's open price may lower than hedge price, you need use the lower one
+                    data.loc[i, 'my_return'] = min(data.loc[i, 'Open'], stop_loss_price_1) / data.loc[i - 1, 'Close'] - 1
+                    flag = 0
+                    
+                    data.loc[i, 'position'] = 0
+                else:
+                    data.loc[i, 'my_return'] = data.loc[i, 'Close'] / data.loc[i - 1, 'Close'] - 1
+                    data.loc[i, 'position'] = 1
+                    
+
+            else: # short position 
+                stop_loss_price_2 = min(data.loc[i, 'SMA_lag_1'], down_short_price + stop_loss_delta_2 * stop_param)
+                if data.loc[i, 'down_hedge_signal'] == -1:
+                    data.loc[i, 'my_return'] = 1 - min(data.loc[i, 'Open'], data.loc[i, 'down_hedge_price']) / data.loc[i - 1, 'Close']
+                    flag = 0
+                    
+                    data.loc[i, 'position'] = 0
+                elif data.loc[i, 'High'] > stop_loss_price_2:
+                    data.loc[i, 'my_return'] = 1 - max(data.loc[i, 'Open'], stop_loss_price_2) / data.loc[i - 1, 'Close']
+                    flag = 0
+                    
+                    data.loc[i, 'position'] = 0
+                else:
+                    data.loc[i, 'my_return'] = 1 - data.loc[i, 'Close'] / data.loc[i - 1, 'Close'] 
+                    data.loc[i, 'position'] = -1
+
+        data['my_return'].fillna(0, inplace = True)
+        data.set_index('Date', inplace = True)
+        data.index = pd.to_datetime(data.index)
+        data['Expect_return'] = 0.0
+        # annual return
+        Colosurge_return = np.mean(data['my_return']) * 252
+        Benchmark_return = np.mean(data['Return']) * 252
+        # annual Risk 
+        Colosurge_volatility = np.std(data['my_return']) * 252
+        Benchmark_volatility = np.std(data['Return']) * 252
+        # Sharp Ratio
+        Colosurge_sharp_ratio = Colosurge_return / (np.std(data['my_return']))
+        Benchmark_sharp_ratio = Benchmark_return / (np.std(data['Return']))
+        # Colosurge Sortino ratio    
+        data['Colosurge_downside_returns'] = 0
+        data.loc[data['my_return'] < 0, 'Colosurge_downside_returns'] = data['my_return'] ** 2
+        Colosurge_expected_return = data['my_return'].mean()
+        Colosurge_down_stdev = np.sqrt(data['Colosurge_downside_returns'].mean())
+        Colosurge_sortino_ratio = (Colosurge_expected_return) / Colosurge_down_stdev
+        # Benchmark Sortino Ratio
+        data['Benchmark_downside_returns'] = 0
+        data.loc[data['Return'] < 0, 'Benchmark_downside_returns'] = data['Return'] ** 2
+        Benchmark_expected_return = data['Return'].mean()
+        Benchmark_down_stdev = np.sqrt(data['Benchmark_downside_returns'].mean())
+        Benchmark_sortino_ratio = (Benchmark_expected_return)/Benchmark_down_stdev
+        
+        Annual_Colosurge_Trade = math.floor((252 * trade) / len(data))
+        Alpha = Colosurge_return - Benchmark_return
+        if summary:
+            print('Alpha: {}'.format(round(Alpha, 4)))
+            print('Annual Colosurge Return: {} %'.format(round(Colosurge_return * 100, 4)))
+            print('Annual Benchmark Return: {} %'.format(round(Benchmark_return * 100, 4)))
+            
+            print('Annual Colosurge Volatility: {} %'.format(round(Colosurge_volatility), 4))
+            print('Annual Benchmark Volatility: {} %'.format(round(Benchmark_volatility), 4))
+            
+            print('Colosurge Sharp Ratio: {}'.format(round(Colosurge_sharp_ratio, 4)))
+            print('Benchmark Sharp Ratio: {}'.format(round(Benchmark_sharp_ratio, 4)))
+            
+            print('Colosurge Sortino Ratio: {}'.format(round(Colosurge_sortino_ratio, 4)))
+            print('Benchmark sortino ratio: {}'.format(round(Benchmark_sortino_ratio, 4)))
+            
+            #print('Total Average Trade Times: {}'.format(Annual_Colosurge_Trade))
+            
+            data['Colosurge_return'] = (data['my_return'] + 1).cumprod()
+            data['Drawdown'] = 100 * (data['Colosurge_return'] - max(data['Colosurge_return'])) / max(data['Colosurge_return'])
+            data['Benchmark_return'] = (data['Return'] + 1).cumprod()
+            data[['Colosurge_return','Benchmark_return']].plot(figsize = (16,9), title = '{} Accumulated Returns'.format(self.equity))
+            data[['Drawdown']].plot(figsize = (16,9), title = '{} Drawn Down'.format(self.equity))
+            
+            '''data.reset_index(inplace = True)
+            fig = plt.figure(figsize = (16, 18))
+            plt.subplot(211)
+            plt.plot(data['Colosurge_return'], label = 'Colosurge Returns')
+            plt.plot(data['Benchmark_return'], label = 'Benchmark Returns')
+            plt.legend(loc = 'best')
+            plt.ylabel('Price')
+            plt.xlabel('Date')
+            plt.title('Colosurge_Returns vs Benchmark Returns')
+            
+            plt.subplot(212)
+            plt.plot(data['Drawdown'], label = 'Colosurge Drawdown')
+            plt.fill_between(data['Expect_return'], data['Drawdown'],alpha=0.25, color = 'r')
+            plt.legend(loc = 'best')
+            plt.ylabel('Percentage')
+            plt.xlabel('Date')
+            plt.title('Colosurge_Drawdown')
+            plt.show()'''
+            #data[['Colosurge_return', 'position']].plot(figsize = (16,9), secondary_y = 'position',title = 'Colosurge Trading Strategy')
+        
+        
+        return (Alpha, data)
+    
+    def Trading_Back_Test(self):
+
+        data = self.data_prepare(self.equity)
+        param = self.Trader_Training(data)
+        data_copy = data.copy()
+        back_test = self.Trading(data_copy, short = param['short'], open_param = param['open_param'], 
+                                 hedge_param = param['hedge_param'], stop_param = param['stop_param'], summary = True)
+        return back_test
+    
+    
+Colosurge = Trading_Strategy('CGL.AX',start_date = '2019-01-01',end_date = '2019-12-01')
+back_test = Colosurge.Trading_Back_Test()
+     
